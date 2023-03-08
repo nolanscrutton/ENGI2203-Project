@@ -17,6 +17,11 @@
 #define DB6 PORTD6
 #define DB7 PORTD7
 
+//Status LED pin definitions
+#define GREEN PORTC2
+#define YELLOW PORTC3
+#define RED PORTC4
+
 //LCD functions
 void LCD_init (void);
 void LCD_command (char command);
@@ -48,9 +53,11 @@ int main(void)
 }
 
 void init_hardware(void) {
-	DDRC |= (1<<RS | 1<<CE);
+	DDRC |= (1<<RS | 1<<CE | 1<<RED | 1<<GREEN | 1<<YELLOW);
 	DDRD |= 0xF0;
 	PORTD &= ~0xF0;
+	PORTC &= ~(1<<RED | 1<<YELLOW);
+	PORTC |= (1<<GREEN);
 
 	LCD_init();
 	LCD_command(0x0F);	
@@ -61,19 +68,26 @@ void system_status(int status) {
 	int armSystem = 0;
 	int changePassword = 1;
 	
-	//system standby
+	//system standby (option to arm system or change password)
 	if(status == 0) {
-				
+		//set status LEDs
+		PORTC |= (1<<GREEN);
+		PORTC &= ~(1<<RED | 1<<YELLOW);
+		
 		LCD_print("Enter Password:");
 		increment_cursor(25);
+		
 		//read password
+		
 		_delay_ms(1000); //comment this out later
 		if(passwordCorrect) {
 			LCD_clear();
 			
 			LCD_print("Arm System?");
 			increment_cursor(29); //start new line
+			
 			//0 for no, 1 for yes
+			
 			_delay_ms(1000); //comment this out later
 			LCD_clear();
 			if(armSystem) {
@@ -82,13 +96,17 @@ void system_status(int status) {
 			
 			LCD_print("Change Password?");
 			increment_cursor(24); //start new line
+			
 			//0 for no, 1 for yes
+			
 			_delay_ms(1000); //comment this out later
 			LCD_clear();
 			if(changePassword) {
 				LCD_print("New Password:");
 				increment_cursor(27); //start new line
+				
 				//read in and update password
+				
 				_delay_ms(1000); //comment this out later
 				
 				LCD_clear();
@@ -104,13 +122,31 @@ void system_status(int status) {
 			system_status(0);
 		}
 	}
-	//system armed
+	
+	//system armed (polling sensors)
 	else if(status == 1) {
+		//set status LEDs
+		PORTC |= (1<<YELLOW);
+		PORTC &= ~(1<<GREEN | 1<<RED);
 		
+		//poll sensors
+		while(1) {
+			
+		}
 	}
-	//system triggered
+	
+	//system triggered (alarm, reading for password)
 	else if(status == 2) {
+		//set status LEDs
+		PORTC |= (1<<RED);
+		PORTC &= ~(1<<GREEN | 1<<YELLOW);
 		
+		//set off alarm
+		
+		//read for password
+		while(1) {
+			
+		}
 	}
 }
 
