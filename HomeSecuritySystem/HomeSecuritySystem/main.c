@@ -53,6 +53,8 @@ int main(void)
 }
 
 void init_hardware(void) {
+	UCSR0B &= ~(1<<TXEN0 | 1<<RXEN0); //disable tx and rx on pin D0 and D1, allows these to be used as normal pins
+	
 	DDRC |= (1<<RS | 1<<CE | 1<<RED | 1<<GREEN | 1<<YELLOW);
 	DDRD |= 0xF0;
 	PORTD &= ~0xF0;
