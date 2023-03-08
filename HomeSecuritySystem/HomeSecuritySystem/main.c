@@ -5,6 +5,7 @@
  * Author : nolan
  */ 
 
+#define F_CPU 16000000UL
 #include <avr/io.h>
 #include <util/delay.h>
 
@@ -21,12 +22,12 @@ void LCD_init (void);
 void LCD_command (char command);
 void LCD_command_4bit (char command);
 void LCD_Char (char AsciiChar);
-void LCD_Send_A_String(char *StringOfCharacters);
-void LCD_clearScreen (void);
+void LCD_print(char *StringOfCharacters);
+void LCD_clear (void);
 void LCD_home(void);
 void LCD_display(void);
 void LCD_noDisplay(void);
-void increment_cursor(void);
+void increment_cursor(int n);
 
 //general system functions
 void init_hardware(void);
@@ -36,23 +37,78 @@ int main(void)
 {
 	init_hardware();
 	
+	LCD_print("Welcome!");
+	_delay_ms(2000);
+	LCD_clear();
+	
     while (1) 
     {
-		
+		system_status(0);
     }
 }
 
 void init_hardware(void) {
+	DDRC |= (1<<RS | 1<<CE);
+	DDRD |= 0xF0;
+	PORTD &= ~0xF0;
+
 	LCD_init();
+	LCD_command(0x0F);	
 }
 
 void system_status(int status) {
+	int passwordCorrect = 1;
+	int armSystem = 0;
+	int changePassword = 1;
+	
+	//system standby
 	if(status == 0) {
-		
+				
+		LCD_print("Enter Password:");
+		increment_cursor(25);
+		//read password
+		_delay_ms(1000); //comment this out later
+		if(passwordCorrect) {
+			LCD_clear();
+			
+			LCD_print("Arm System?");
+			increment_cursor(29); //start new line
+			//0 for no, 1 for yes
+			_delay_ms(1000); //comment this out later
+			LCD_clear();
+			if(armSystem) {
+				system_status(1); //system status armed
+			}
+			
+			LCD_print("Change Password?");
+			increment_cursor(24); //start new line
+			//0 for no, 1 for yes
+			_delay_ms(1000); //comment this out later
+			LCD_clear();
+			if(changePassword) {
+				LCD_print("New Password:");
+				increment_cursor(27); //start new line
+				//read in and update password
+				_delay_ms(1000); //comment this out later
+				
+				LCD_clear();
+				LCD_print("Password Changed!");
+				_delay_ms(1000); //comment this out later
+				system_status(0);
+			}
+		}
+		else {
+			LCD_print("Wrong Password!");
+			_delay_ms(1000);
+			LCD_clear();
+			system_status(0);
+		}
 	}
+	//system armed
 	else if(status == 1) {
 		
 	}
+	//system triggered
 	else if(status == 2) {
 		
 	}
@@ -142,7 +198,7 @@ void LCD_Char (char AsciiChar)
 	_delay_ms(2);
 	
 }
-void LCD_Send_A_String(char *StringOfCharacters)
+void LCD_print(char *StringOfCharacters)
 {
 	//Take a string input and displays it
 	//Each character in the string is processed using LCD_Char which converts the character into the proper 8bit hex #
@@ -155,7 +211,7 @@ void LCD_Send_A_String(char *StringOfCharacters)
 	}
 	
 }
-void LCD_clearScreen (void)
+void LCD_clear (void)
 {
 	//Clears the screen
 	//DB7 DB6 DB5 DB4 DB3 DB2 DB1 DB0
@@ -167,6 +223,7 @@ void LCD_clearScreen (void)
 	//DB7 DB6 DB5 DB4 DB3 DB2 DB1 DB0
 	//0    0   0   0  1    0   0  0
 	LCD_command(0x08); //cursor at home position
+	LCD_command(0x0F); //cursor on, blinking
 }
 void LCD_home(void)
 {
@@ -189,7 +246,11 @@ void LCD_noDisplay(void)
 	//0    0   0   0  1    0   0  0
 	LCD_command(0x08);
 }
-void increment_cursor(void)
+void increment_cursor(int n)
 {
-	LCD_command(0x14);
+	int i;
+	
+	for(i = 0; i<n; i++) {
+		LCD_command(0x14);
+	}
 }
