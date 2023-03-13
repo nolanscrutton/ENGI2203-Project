@@ -33,6 +33,8 @@ void LCD_home(void);
 void LCD_display(void);
 void LCD_noDisplay(void);
 void increment_cursor(int n);
+void disable_cursor(void);
+void enable_cursor(void);
 
 //general system functions
 void init_hardware(void);
@@ -131,6 +133,10 @@ void system_status(int status) {
 		PORTC |= (1<<YELLOW);
 		PORTC &= ~(1<<GREEN | 1<<RED);
 		
+		//set LCD
+		disable_cursor();
+		LCD_print("System Armed");
+		
 		//poll sensors
 		while(1) {
 			
@@ -144,6 +150,10 @@ void system_status(int status) {
 		PORTC &= ~(1<<GREEN | 1<<YELLOW);
 		
 		//set off alarm
+		
+		LCD_clear();
+		LCD_print("Enter Password:");
+		increment_cursor(25);
 		
 		//read for password
 		while(1) {
@@ -291,4 +301,10 @@ void increment_cursor(int n)
 	for(i = 0; i<n; i++) {
 		LCD_command(0x14);
 	}
+}
+void disable_cursor() {
+	LCD_command(0x0C);
+}
+void enable_cursor() {
+	LCD_command(0x0F);
 }
