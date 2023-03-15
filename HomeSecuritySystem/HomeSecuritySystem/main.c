@@ -22,6 +22,24 @@
 #define YELLOW PORTC3
 #define RED PORTC4
 
+//Sensor pin definitions
+#define HE1 PORTD0
+#define HE2 PORTD1
+#define PIR PORTB5
+
+//keypad pin definitions
+#define C1 PORTD2
+#define C2 PORTB0
+#define C3 PORTB1
+#define R1 PORTB2
+#define R2 PORTB3
+#define R3 PORTB4
+#define R4 PORTC5
+
+//keypad global variables
+volatile int row;
+volatile int col;
+
 //LCD functions
 void LCD_init (void);
 void LCD_command (char command);
@@ -35,6 +53,21 @@ void LCD_noDisplay(void);
 void increment_cursor(int n);
 void disable_cursor(void);
 void enable_cursor(void);
+
+//sensor function
+void poll_sensors(void);
+
+//speaker functions
+void init_speaker(void);
+void siren_on(void);
+void siren_off(void);
+
+//keypad functions
+char get_button(void);
+char get_new_button(void);
+void set_row_low(void);
+int col_pushed(void);
+int read_password(void);
 
 //general system functions
 void init_hardware(void);
@@ -57,13 +90,39 @@ int main(void)
 void init_hardware(void) {
 	UCSR0B &= ~(1<<TXEN0 | 1<<RXEN0); //disable tx and rx on pin D0 and D1, allows these to be used as normal pins
 	
+	//display pins
 	DDRC |= (1<<RS | 1<<CE | 1<<RED | 1<<GREEN | 1<<YELLOW);
 	DDRD |= 0xF0;
 	PORTD &= ~0xF0;
 	PORTC &= ~(1<<RED | 1<<YELLOW);
 	PORTC |= (1<<GREEN);
-
+	
+	//speaker pin
+	DDRD |= (1<<PORTD3);
+	
+	//sensor pins
+	DDRD &= ~(1<<HE1 | 1<<HE2);
+	DDRB &= ~(1<<PIR);
+	
+	//keypad pins
+	//columns as inputs
+	DDRD &= ~(1<<C1);
+	DDRB &= ~(1<<C2 | 1<<C3);
+	
+	//rows as outputs
+	DDRB |= (1<<R1 | 1<<R2 | 1<<R3);
+	DDRC |= (1<<R4);
+	
+	//set outputs low
+	PORTB &= ~(1<<R1 | 1<<R2 | 1<<R3);
+	PORTC &= ~(1<<R4);
+	
+	//enable pullup resistors on inputs
+	PORTD |= (1<<C1);
+	PORTB |= (1<<C2 | 1<<C3);
+	
 	LCD_init();
+	speaker_init();
 	LCD_command(0x0F);	
 }
 
@@ -78,6 +137,12 @@ void system_status(int status) {
 		PORTC |= (1<<GREEN);
 		PORTC &= ~(1<<RED | 1<<YELLOW);
 		
+		//wait for PIR
+		LCD_print("System Startup...");
+		_delay_ms(60000);
+		LCD_clear();
+		
+		//begin sequence
 		LCD_print("Enter Password:");
 		increment_cursor(25);
 		
@@ -139,7 +204,7 @@ void system_status(int status) {
 		
 		//poll sensors
 		while(1) {
-			
+			poll_sensors();
 		}
 	}
 	
@@ -162,6 +227,7 @@ void system_status(int status) {
 	}
 }
 
+//LCD Functions
 void LCD_init(void)
 {
 	_delay_ms(40); //LCD power on delay, needs to be greater than 15ms
@@ -309,115 +375,148 @@ void enable_cursor() {
 	LCD_command(0x0F);
 }
 
-//Hall effect sensor code (Subject to change pins)
-/*
- * Hall_Sensor_AH9251.c
- * Created: 10/7/2022 5:19:24 PM
- * Author : Ha Vu
- *
- * Takes output from Digital Hall Effect Sensor, outputs status on an LED and USART
- */ 
-#define F_CPU 16000000UL
-#include <avr/io.h>
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
-#include <util/delay.h>
-
-void init_hardware(void)
+//Sensor Function
+void poll_sensors(void)
 {
-	//Set pin as output to LED
-	DDRB |= (1<<PB1);
+	//hall effects
+	if(!(PIND & (1<<HE1) == 0) || !(PIND & (1<<HE2) == 0)) {
+		system_status(2);
+	}
 	
-	//Set pin output to be low
-	PORTB &= ~(1<<PB1);
-	
-	//Set pin as input from sensor
-	DDRB &= ~(1<<PB0);
-	
-	//Enable pull-up resistors on the input
-	PORTB |= (1<<PB0);
+	//PIR
+	if(PINB & (1<<PIR) == 0) {
+		system_status(2);
+	}
 }
 
-int main(void)
+//Speaker Functions
+void speaker_init(void)
 {
-    init_hardware();
-	init_uart();
-	
-	printf("System Booted, built %s on %s\n ", __TIME__,__DATE__);
-	printf("Bring a Magnet Close to the Hall Sensor, see LED come on!\n");
-	
-    while (1) 
-    {
-		//Read the sensor, if it goes low, it has detected the magnet
-		if ((PINB & (1<< PINB0))==0){
-			//Magnet detected, drive the LED high to turn it on
-			PORTB |=(1<<PB1); //drive LED High
-			printf("Magnet Detected!\n");
+	OCR2A =128; //OCR2A set the top value of the timer/counter2
+	OCR2B =0; //OCR2B/OCR2A sets the PWM duty cycle to 50%
 
-		}else{
-			//No Magnet detected, drive the LED low to turn it off
-			PORTB &=~(1<<PB1); //drive LED low
-			printf("No Magnet\n");
+	TCCR2A |= (1<<COM2B1);
+	TCCR2A &= ~(1<<COM2B0); //Set Clear OC2B on Compare Match, set OC2B at Bottom in non-inverting mode
+	TCCR2A |= (1<<WGM21 | 1<<WGM20); //Set Fast PWM mode
+	TCCR2B |= (1<<WGM22); //Set OCRA to represent the top count
+	
+	siren_off();
+}
+void siren_on(void)
+{
+	TCCR2B |= (1<<CS22 | 1<<CS20);
+	TCCR2B &= ~(1<<CS21); //Set prescaler to 128, starts counter!
+}
+void siren_off(void)
+{
+	TCCR2B &= ~(1<<CS22 | 1<<CS20);
+	TCCR2B &= ~(1<<CS21);
+}
+
+//Keypad Functions
+char get_button(void)
+{
+	int key_pressed=0;
+	char b;
+	char buttons[4][3]={{'1','2','3'},
+	{'4','5','6'},
+	{'7','8','9'},
+	{'*','0','#'}}; //Same as in Matrix_KeyPad_1.c
+
+	//Check for button push
+	//Cycle through the rows with the for loop
+	for (row=0; row< 4 ; row++)
+	{
+		set_row_low (row);
+		_delay_ms(20);
 		
+		col=col_pushed();
+
+		if (col)
+		{
+			b = buttons[row][col-1]; //b= look-up table in matrix
+			//printf("%d-%d: %c\n", row, col,b );
+			_delay_ms(500);
+			key_pressed=1; //A key was pressed
 		}
-    }
+	}
+	if (key_pressed)
+	{
+		return b;
+	}
+	else
+	{
+		return 0;
+	}
 }
-
-
-//PIR sensor code (Subject to pin changes)
-/*
- * HC-SR501_Better.c
- *
- * Created: 10/2/2022 12:42:34 PM
- * Author : Dr. sara.stout-grandy
- *
- */ 
-
-#define F_CPU=16000000UL
-
-#include <avr/io.h>
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
-
-int main(void)
+char get_new_button(void)
 {
-	int tom = 0;
-    int val=0; //variable for sensor input
+	static char last_button = 0;
+	char b;
 	
-	init_uart();
-	
-	DDRB |= (1<<PB1);;		// Set pin as Output to LED.
-	DDRB &= ~(1<<PB0);;		// Set pin as Input for PIR Output
-	
-	printf("System Booted, built %s on %s\n ", __TIME__,__DATE__);
+	b=get_button(); //Call get_button function
+	if (b == last_button)
+	{
+		return 0;
+	}
 
-	printf("PIR Sensor Testing: Move hand in front of the sensor.\n\n");
-
-    while (1) 
-    {
-		val= (PINB & (1<< PINB0)); //Read the Sensor, store in variable val
-		if (val) //if val is high
-		{
-			PORTB |=(1<<PB1); //Turn the LED on (set the bit high)
-			if (tom == 0) //if state of PIR sensor was zero
-			{
-				tom = 1;
-				printf("Motion Detected!\n\n");
-			}	
-		}
-		else
-		{
-			PORTB &=~(1<<PB1); //Turn the LED off (set the bit low)
-			if (tom == 1)  //if state of PIR sensor was one
-			{
-				printf("Motion Ended!\n\n");
-				tom = 0;
-			}
-		}
-    }
+	last_button = b;
+	return b;
 }
+void set_row_low(int row)
+{
+	//Hi-Z the rows (make inputs without pull-ups)
+	PORTD |= (1<<C1);
+	PORTB |= (1<<C2 | 1<<C3);
 
-
-
+	//Drive the specified row low
+	switch(row)
+	{
+		case 0: //set Row 1 low
+		PORTB &= ~(1<<R1);
+		PORTB |= (1<<R2);
+		PORTB |= (1<<R3);
+		PORTC |= (1<<R4);
+		break;
+		case 1: //set Row 2 low
+		PORTB &= ~(1<<R2);
+		PORTB |= (1<<R1);
+		PORTB |= (1<<R3);
+		PORTC |= (1<<R4);
+		break;
+		case 2: //set Row 3 low
+		PORTB &= ~(1<<R3);
+		PORTB |= (1<<R2);
+		PORTB |= (1<<R1);
+		PORTC |= (1<<R4);
+		break;
+		case 3: //set Row 4 low
+		PORTB &= ~(1<<R4);
+		PORTB |= (1<<R1);
+		PORTD |= (1<<R2);
+		PORTB |= (1<<R3);
+		break;
+		default: printf("no row set\n");
+	}
+}
+int col_pushed(void)
+{
+	
+	if ((PIND & (1<<5) )==0) //check column 1
+	{
+		return 1;
+	}
+	else if ((PIND & (1<<4) )==0) //check column 2
+	{
+		return 2;
+	}
+	else if ((PIND & (1<<3) )==0) //check column 3
+	{
+		return 3;
+	}
+	else
+	{
+		return 0;
+	}
+	
+}
