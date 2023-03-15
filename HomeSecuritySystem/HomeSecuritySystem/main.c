@@ -308,3 +308,116 @@ void disable_cursor() {
 void enable_cursor() {
 	LCD_command(0x0F);
 }
+
+//Hall effect sensor code (Subject to change pins)
+/*
+ * Hall_Sensor_AH9251.c
+ * Created: 10/7/2022 5:19:24 PM
+ * Author : Ha Vu
+ *
+ * Takes output from Digital Hall Effect Sensor, outputs status on an LED and USART
+ */ 
+#define F_CPU 16000000UL
+#include <avr/io.h>
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <util/delay.h>
+
+void init_hardware(void)
+{
+	//Set pin as output to LED
+	DDRB |= (1<<PB1);
+	
+	//Set pin output to be low
+	PORTB &= ~(1<<PB1);
+	
+	//Set pin as input from sensor
+	DDRB &= ~(1<<PB0);
+	
+	//Enable pull-up resistors on the input
+	PORTB |= (1<<PB0);
+}
+
+int main(void)
+{
+    init_hardware();
+	init_uart();
+	
+	printf("System Booted, built %s on %s\n ", __TIME__,__DATE__);
+	printf("Bring a Magnet Close to the Hall Sensor, see LED come on!\n");
+	
+    while (1) 
+    {
+		//Read the sensor, if it goes low, it has detected the magnet
+		if ((PINB & (1<< PINB0))==0){
+			//Magnet detected, drive the LED high to turn it on
+			PORTB |=(1<<PB1); //drive LED High
+			printf("Magnet Detected!\n");
+
+		}else{
+			//No Magnet detected, drive the LED low to turn it off
+			PORTB &=~(1<<PB1); //drive LED low
+			printf("No Magnet\n");
+		
+		}
+    }
+}
+
+
+//PIR sensor code (Subject to pin changes)
+/*
+ * HC-SR501_Better.c
+ *
+ * Created: 10/2/2022 12:42:34 PM
+ * Author : Dr. sara.stout-grandy
+ *
+ */ 
+
+#define F_CPU=16000000UL
+
+#include <avr/io.h>
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+
+int main(void)
+{
+	int tom = 0;
+    int val=0; //variable for sensor input
+	
+	init_uart();
+	
+	DDRB |= (1<<PB1);;		// Set pin as Output to LED.
+	DDRB &= ~(1<<PB0);;		// Set pin as Input for PIR Output
+	
+	printf("System Booted, built %s on %s\n ", __TIME__,__DATE__);
+
+	printf("PIR Sensor Testing: Move hand in front of the sensor.\n\n");
+
+    while (1) 
+    {
+		val= (PINB & (1<< PINB0)); //Read the Sensor, store in variable val
+		if (val) //if val is high
+		{
+			PORTB |=(1<<PB1); //Turn the LED on (set the bit high)
+			if (tom == 0) //if state of PIR sensor was zero
+			{
+				tom = 1;
+				printf("Motion Detected!\n\n");
+			}	
+		}
+		else
+		{
+			PORTB &=~(1<<PB1); //Turn the LED off (set the bit low)
+			if (tom == 1)  //if state of PIR sensor was one
+			{
+				printf("Motion Ended!\n\n");
+				tom = 0;
+			}
+		}
+    }
+}
+
+
+
