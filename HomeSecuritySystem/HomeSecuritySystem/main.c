@@ -60,14 +60,14 @@ void enable_cursor(void);
 void poll_sensors(void);
 
 //speaker functions
-void init_speaker(void);
+void speaker_init(void);
 void siren_on(void);
 void siren_off(void);
 
 //keypad functions
 char get_button(void);
 char get_new_button(void);
-void set_row_low(void);
+void set_row_low(int row);
 int col_pushed(void);
 int read_password(void);
 int read_bool(void);
@@ -215,7 +215,6 @@ void system_status(int status) {
 		while(1) {
 			if(read_password()) {
 				LCD_clear();
-				disable_cursor();
 				LCD_print("System Disarmed!");
 				_delay_ms(1000);
 				system_status(0);
@@ -382,12 +381,12 @@ void enable_cursor() {
 void poll_sensors(void)
 {
 	//hall effects
-	if(!(PIND & (1<<HE1) == 0) || !(PIND & (1<<HE2) == 0)) {
+	if(!((PIND & (1<<HE1)) == 0) || !((PIND & (1<<HE2)) == 0)) {
 		system_status(2);
 	}
 	
 	//PIR
-	if(PINB & (1<<PIR) == 0) {
+	if((PINB & (1<<PIR)) == 0) {
 		system_status(2);
 	}
 }
@@ -408,12 +407,12 @@ void speaker_init(void)
 void siren_on(void)
 {
 	TCCR2B |= (1<<CS22 | 1<<CS20);
-	TCCR2B &= ~(1<<CS21); //Set prescaler to 128, starts counter!
+	TCCR2B &= ~(1<<CS21); //Set prescaler to 128, starts counter
 }
 void siren_off(void)
 {
 	TCCR2B &= ~(1<<CS22 | 1<<CS20);
-	TCCR2B &= ~(1<<CS21);
+	TCCR2B &= ~(1<<CS21); //Set prescaler to 0, stops counter;
 }
 
 //Keypad Functions
@@ -500,7 +499,6 @@ void set_row_low(int row)
 		PORTD |= (1<<R2);
 		PORTB |= (1<<R3);
 		break;
-		default: printf("no row set\n");
 	}
 }
 int col_pushed(void)
@@ -566,7 +564,7 @@ int read_password(void) {
 		{
 			pin[4]='\0'; //Terminate the string with a null terminator...that makes it a string.
 			if (strcmp(pin,password)) {
-				return 0
+				return 0;
 			}
 			else {
 				return 1;
@@ -620,7 +618,7 @@ void update_password(void) {
 			for(int j = 0; j<i; j++) {
 				decrement_cursor(1);
 			}
-			i=0; //use the backspace character to backspace the replace the character with a backspace
+			i=0;
 			continue;//breaks one iteration
 		}
 
@@ -634,7 +632,9 @@ void update_password(void) {
 		if (i>=4)
 		{
 			pin[4]='\0';
-			password = pin;
+			for(int i = 0; i<=4; i++) {
+				password[i] = pin[i];
+			}
 			LCD_clear();
 			LCD_print("Password Updated!");
 			_delay_ms(1000);
