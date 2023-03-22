@@ -80,21 +80,22 @@ void system_status(int status); //status 0 is standby, status 1 is armed, status
 
 int main(void)
 {
+	int PIRflag = 0;
 	init_hardware();
 	
 	LCD_print("Welcome!");
 	_delay_ms(2000);
 	LCD_clear();
 
-	//wait for PIR
-	LCD_print("System Startup...");
-	_delay_ms(60000);
-	LCD_clear();
+	if(PIRflag) {
+		//wait for PIR
+		LCD_print("System Startup...");
+		_delay_ms(60000);
+		LCD_clear();
+	}
 	
-    while (1) 
-    {
+
 		system_status(0);
-    }
 }
 
 void init_hardware(void) {
@@ -148,6 +149,8 @@ void system_status(int status) {
 		//begin sequence
 		LCD_print("Enter Password:");
 		increment_cursor(25);
+		
+		read_password();
 		
 		if(read_password()) {
 			LCD_clear();
@@ -469,8 +472,8 @@ char get_new_button(void)
 void set_row_low(int row)
 {
 	//Hi-Z the rows (make inputs without pull-ups)
-	PORTD |= (1<<C1);
-	PORTB |= (1<<C2 | 1<<C3);
+	PORTD &= ~(1<<C1);
+	PORTB &= ~(1<<C2 | 1<<C3);
 
 	//Drive the specified row low
 	switch(row)
