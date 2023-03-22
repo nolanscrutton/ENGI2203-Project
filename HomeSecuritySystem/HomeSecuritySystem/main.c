@@ -39,6 +39,7 @@
 //keypad global variables
 volatile int row;
 volatile int col;
+volatile char password[] = "1234";
 
 //LCD functions
 void LCD_init (void);
@@ -70,6 +71,7 @@ void set_row_low(void);
 int col_pushed(void);
 int read_password(void);
 int read_bool(void);
+void update_password(void);
 
 //general system functions
 void init_hardware(void);
@@ -131,14 +133,11 @@ void init_hardware(void) {
 	
 	LCD_init();
 	speaker_init();
-	LCD_command(0x0F);	
 }
 
 void system_status(int status) {
-	int passwordCorrect = 1;
-	int armSystem = 0;
-	int changePassword = 1;
-	char button;
+	
+	LCD_clear();
 	
 	//system standby (option to arm system or change password)
 	if(status == 0) {
@@ -156,28 +155,24 @@ void system_status(int status) {
 			LCD_print("Arm System?");
 			increment_cursor(29); //start new line
 			
-			LCD_clear();
 			if(read_bool()) {
 				system_status(1); //system status armed
 			}
 			
+			LCD_clear();
+			
 			LCD_print("Change Password?");
 			increment_cursor(24); //start new line
 			
-			LCD_clear();
 			if(read_bool()) {
-				LCD_print("New Password:");
-				increment_cursor(27); //start new line
-				
-				//read in and update password
-				
-				_delay_ms(1000); //comment this out later
-				
-				LCD_clear();
-				LCD_print("Password Changed!");
-				_delay_ms(1000); //comment this out later
+				update_password();
 				system_status(0);
 			}
+			
+			LCD_clear();
+			LCD_print("System Standby");
+			
+			system_status(0);
 		}
 		else {
 			LCD_print("Wrong Password!");
@@ -218,7 +213,13 @@ void system_status(int status) {
 		
 		//read for password
 		while(1) {
-			
+			if(read_password()) {
+				LCD_clear();
+				disable_cursor();
+				LCD_print("System Disarmed!");
+				_delay_ms(1000);
+				system_status(0);
+			}
 		}
 	}
 }
@@ -245,6 +246,7 @@ void LCD_init(void)
 	LCD_command(0x08); //Display off, cursor off (0x0C for display ON, cursor Off)
 	LCD_command(0x01); //Display clear
 	LCD_command(0x06); //Entry Set mode, increment cursor, no shift
+	LCD_command(0x0C); //No cursor
 	
 	_delay_ms(2);
 }
@@ -333,7 +335,7 @@ void LCD_clear (void)
 	//DB7 DB6 DB5 DB4 DB3 DB2 DB1 DB0
 	//0    0   0   0  1    0   0  0
 	LCD_command(0x08); //cursor at home position
-	LCD_command(0x0F); //cursor on, blinking
+	LCD_command(0x0C); //cursor off
 }
 void LCD_home(void)
 {
@@ -525,8 +527,9 @@ int col_pushed(void)
 int read_password(void) {
 	char b=0;
 	char pin[10]; //string as an array of chars
-	char password[]="1234"; 
 	int i=0;
+	
+	enable_cursor();
 
 	while (1)
 	{
@@ -573,6 +576,8 @@ int read_password(void) {
 }
 int read_bool(void) {
 	char button;
+	
+	enable_cursor();
 
 	while(1) {
 		button = get_new_button();
@@ -583,6 +588,57 @@ int read_bool(void) {
 			else if(button == '1') {
 				return 1;
 			}
+		}
+	}
+}
+void update_password(void) {
+	char b=0;
+	char pin[10]; //string as an array of chars
+	int i=0;
+	
+	enable_cursor();
+	
+	LCD_print("New Password:");
+	increment_cursor(27);
+	
+	while (1)
+	{
+		b=get_new_button();
+		
+		//Clear a digit
+		if (b== '#')
+		{
+			pin[i] = '\b';
+			i--;
+			decrement_cursor(1);  //use the backspace character to backspace the replace the character with a backspace
+			continue;//breaks one iteration
+		}
+		//Clear all digits
+		if (b== '*')
+		{
+			pin[i] = '\b';
+			for(int j = 0; j<i; j++) {
+				decrement_cursor(1);
+			}
+			i=0; //use the backspace character to backspace the replace the character with a backspace
+			continue;//breaks one iteration
+		}
+
+		if (b)
+		{
+			pin[i] = b;
+			i++; //Store value pin array to "b"
+			LCD_Char(b);
+
+		}
+		if (i>=4)
+		{
+			pin[4]='\0';
+			password = pin;
+			LCD_clear();
+			LCD_print("Password Updated!");
+			_delay_ms(1000);
+			return;
 		}
 	}
 }
