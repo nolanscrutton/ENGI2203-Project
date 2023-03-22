@@ -51,6 +51,7 @@ void LCD_home(void);
 void LCD_display(void);
 void LCD_noDisplay(void);
 void increment_cursor(int n);
+void decrement_cursor(int n);
 void disable_cursor(void);
 void enable_cursor(void);
 
@@ -68,10 +69,12 @@ char get_new_button(void);
 void set_row_low(void);
 int col_pushed(void);
 int read_password(void);
+int read_bool(void);
 
 //general system functions
 void init_hardware(void);
 void system_status(int status); //status 0 is standby, status 1 is armed, status 2 is triggered
+
 
 int main(void)
 {
@@ -79,6 +82,11 @@ int main(void)
 	
 	LCD_print("Welcome!");
 	_delay_ms(2000);
+	LCD_clear();
+
+	//wait for PIR
+	LCD_print("System Startup...");
+	_delay_ms(60000);
 	LCD_clear();
 	
     while (1) 
@@ -130,6 +138,7 @@ void system_status(int status) {
 	int passwordCorrect = 1;
 	int armSystem = 0;
 	int changePassword = 1;
+	char button;
 	
 	//system standby (option to arm system or change password)
 	if(status == 0) {
@@ -137,40 +146,26 @@ void system_status(int status) {
 		PORTC |= (1<<GREEN);
 		PORTC &= ~(1<<RED | 1<<YELLOW);
 		
-		//wait for PIR
-		LCD_print("System Startup...");
-		_delay_ms(60000);
-		LCD_clear();
-		
 		//begin sequence
 		LCD_print("Enter Password:");
 		increment_cursor(25);
 		
-		//read password
-		
-		_delay_ms(1000); //comment this out later
-		if(passwordCorrect) {
+		if(read_password()) {
 			LCD_clear();
 			
 			LCD_print("Arm System?");
 			increment_cursor(29); //start new line
 			
-			//0 for no, 1 for yes
-			
-			_delay_ms(1000); //comment this out later
 			LCD_clear();
-			if(armSystem) {
+			if(read_bool()) {
 				system_status(1); //system status armed
 			}
 			
 			LCD_print("Change Password?");
 			increment_cursor(24); //start new line
 			
-			//0 for no, 1 for yes
-			
-			_delay_ms(1000); //comment this out later
 			LCD_clear();
-			if(changePassword) {
+			if(read_bool()) {
 				LCD_print("New Password:");
 				increment_cursor(27); //start new line
 				
@@ -215,7 +210,8 @@ void system_status(int status) {
 		PORTC &= ~(1<<GREEN | 1<<YELLOW);
 		
 		//set off alarm
-		
+		siren_on();		
+
 		LCD_clear();
 		LCD_print("Enter Password:");
 		increment_cursor(25);
@@ -368,6 +364,11 @@ void increment_cursor(int n)
 		LCD_command(0x14);
 	}
 }
+void decrement_cursor(int n) {
+	for(int i = 0; i<n; i++) {
+		LCD_command(0x10);
+	}
+}
 void disable_cursor() {
 	LCD_command(0x0C);
 }
@@ -418,7 +419,8 @@ char get_button(void)
 {
 	int key_pressed=0;
 	char b;
-	char buttons[4][3]={{'1','2','3'},
+	char buttons[4][3]=
+	{{'1','2','3'},
 	{'4','5','6'},
 	{'7','8','9'},
 	{'*','0','#'}}; //Same as in Matrix_KeyPad_1.c
@@ -519,4 +521,68 @@ int col_pushed(void)
 		return 0;
 	}
 	
+}
+int read_password(void) {
+	char b=0;
+	char pin[10]; //string as an array of chars
+	char password[]="1234"; 
+	int i=0;
+
+	while (1)
+	{
+		b=get_new_button();
+	
+		//Clear a digit
+		if (b== '#')
+		{
+			pin[i] = '\b';
+			i--;
+			decrement_cursor(1);  //use the backspace character to backspace the replace the character with a backspace
+			continue;//breaks one iteration
+		}
+		//Clear all digits
+		if (b== '*')
+		{
+			pin[i] = '\b';
+			for(int j = 0; j<i; j++) {
+				decrement_cursor(1);
+
+			}
+			i=0; //use the backspace character to backspace the replace the character with a backspace
+			continue;//breaks one iteration
+		}
+
+		if (b)
+		{
+			pin[i] = b;
+			i++; //Store value pin array to "b"
+			LCD_Char(b);
+
+		}
+		if (i>=4)
+		{
+			pin[4]='\0'; //Terminate the string with a null terminator...that makes it a string.
+			if (strcmp(pin,password)) {
+				return 0
+			}
+			else {
+				return 1;
+			}
+		}
+	}
+}
+int read_bool(void) {
+	char button;
+
+	while(1) {
+		button = get_new_button();
+		if(button) {
+			if(button == '0') {
+				return 0;
+			}
+			else if(button == '1') {
+				return 1;
+			}
+		}
+	}
 }
