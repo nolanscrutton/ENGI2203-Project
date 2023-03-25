@@ -150,8 +150,6 @@ void system_status(int status) {
 		LCD_print("Enter Password:");
 		increment_cursor(25);
 		
-		read_password();
-		
 		if(read_password()) {
 			LCD_clear();
 			
@@ -174,12 +172,14 @@ void system_status(int status) {
 			
 			LCD_clear();
 			LCD_print("System Standby");
+			_delay_ms(2000);
 			
 			system_status(0);
 		}
 		else {
+			LCD_clear();
 			LCD_print("Wrong Password!");
-			_delay_ms(1000);
+			_delay_ms(2000);
 			LCD_clear();
 			system_status(0);
 		}
@@ -188,7 +188,7 @@ void system_status(int status) {
 	//system armed (polling sensors)
 	else if(status == 1) {
 		//set status LEDs
-		PORTC |= (1<<YELLOW);
+		PORTC &= ~(1<<YELLOW);
 		PORTC &= ~(1<<GREEN | 1<<RED);
 		
 		//set LCD
@@ -218,8 +218,9 @@ void system_status(int status) {
 		while(1) {
 			if(read_password()) {
 				LCD_clear();
+				siren_off();
 				LCD_print("System Disarmed!");
-				_delay_ms(1000);
+				_delay_ms(2000);
 				system_status(0);
 			}
 		}
@@ -389,16 +390,16 @@ void poll_sensors(void)
 	}
 	
 	//PIR
-	if((PINB & (1<<PIR)) == 0) {
-		system_status(2);
-	}
+	//if((PINB & (1<<PIR)) == 0) {
+	//	system_status(2);
+	//}
 }
 
 //Speaker Functions
 void speaker_init(void)
 {
-	OCR2A =128; //OCR2A set the top value of the timer/counter2
-	OCR2B =0; //OCR2B/OCR2A sets the PWM duty cycle to 50%
+	OCR2A =64; //OCR2A set the top value of the timer/counter2
+	OCR2B =32; //OCR2B/OCR2A sets the PWM duty cycle to 50%
 
 	TCCR2A |= (1<<COM2B1);
 	TCCR2A &= ~(1<<COM2B0); //Set Clear OC2B on Compare Match, set OC2B at Bottom in non-inverting mode
@@ -472,8 +473,8 @@ char get_new_button(void)
 void set_row_low(int row)
 {
 	//Hi-Z the rows (make inputs without pull-ups)
-	PORTD &= ~(1<<C1);
-	PORTB &= ~(1<<C2 | 1<<C3);
+	PORTD |= (1<<C1);
+	PORTB |= (1<<C2 | 1<<C3);
 
 	//Drive the specified row low
 	switch(row)
@@ -497,25 +498,25 @@ void set_row_low(int row)
 		PORTC |= (1<<R4);
 		break;
 		case 3: //set Row 4 low
-		PORTB &= ~(1<<R4);
+		PORTC &= ~(1<<R4);
 		PORTB |= (1<<R1);
-		PORTD |= (1<<R2);
+		PORTB |= (1<<R2);
 		PORTB |= (1<<R3);
-		break;
+		break;		
 	}
 }
 int col_pushed(void)
 {
 	
-	if ((PIND & (1<<5) )==0) //check column 1
+	if ((PIND & (1<<C1) )==0) //check column 1
 	{
 		return 1;
 	}
-	else if ((PIND & (1<<4) )==0) //check column 2
+	else if ((PINB & (1<<C2))==0) //check column 2
 	{
 		return 2;
 	}
-	else if ((PIND & (1<<3) )==0) //check column 3
+	else if ((PINB & (1<<C3))==0) //check column 3
 	{
 		return 3;
 	}
@@ -541,7 +542,9 @@ int read_password(void) {
 		{
 			pin[i] = '\b';
 			i--;
-			decrement_cursor(1);  //use the backspace character to backspace the replace the character with a backspace
+			decrement_cursor(1);
+			LCD_Char(' ');
+			decrement_cursor(1);
 			continue;//breaks one iteration
 		}
 		//Clear all digits
@@ -550,7 +553,8 @@ int read_password(void) {
 			pin[i] = '\b';
 			for(int j = 0; j<i; j++) {
 				decrement_cursor(1);
-
+				LCD_Char(' ');
+				decrement_cursor(1);
 			}
 			i=0; //use the backspace character to backspace the replace the character with a backspace
 			continue;//breaks one iteration
@@ -597,8 +601,8 @@ void update_password(void) {
 	char pin[10]; //string as an array of chars
 	int i=0;
 	
+	LCD_clear();
 	enable_cursor();
-	
 	LCD_print("New Password:");
 	increment_cursor(27);
 	
@@ -611,7 +615,9 @@ void update_password(void) {
 		{
 			pin[i] = '\b';
 			i--;
-			decrement_cursor(1);  //use the backspace character to backspace the replace the character with a backspace
+			decrement_cursor(1);
+			LCD_Char(' ');
+			decrement_cursor(1);
 			continue;//breaks one iteration
 		}
 		//Clear all digits
@@ -619,6 +625,8 @@ void update_password(void) {
 		{
 			pin[i] = '\b';
 			for(int j = 0; j<i; j++) {
+				decrement_cursor(1);
+				LCD_Char(' ');
 				decrement_cursor(1);
 			}
 			i=0;
@@ -640,7 +648,7 @@ void update_password(void) {
 			}
 			LCD_clear();
 			LCD_print("Password Updated!");
-			_delay_ms(1000);
+			_delay_ms(2000);
 			return;
 		}
 	}
