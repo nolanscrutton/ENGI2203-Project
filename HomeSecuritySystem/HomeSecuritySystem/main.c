@@ -41,6 +41,9 @@ volatile int row;
 volatile int col;
 volatile char password[] = "1234";
 
+//number of failed attempts
+volatile int fails = 0;
+
 //LCD functions
 void LCD_init (void);
 void LCD_command (char command);
@@ -137,14 +140,17 @@ void init_hardware(void) {
 }
 
 void system_status(int status) {
-	
-	LCD_clear();
-	
+
 	//system standby (option to arm system or change password)
 	if(status == 0) {
+		//clear LCD
+		LCD_clear();
+
 		//set status LEDs
 		PORTC |= (1<<GREEN);
 		PORTC &= ~(1<<RED | 1<<YELLOW);
+
+		siren_off();
 		
 		//begin sequence
 		LCD_print("Enter Password:");
@@ -177,8 +183,12 @@ void system_status(int status) {
 			system_status(0);
 		}
 		else {
+			if(fails >= 5) system_status(4);
 			LCD_clear();
 			LCD_print("Wrong Password!");
+			increment_cursor(25);
+			LCD_print("Tries left: ");
+			LCD_Char((5-fails) + '0');
 			_delay_ms(2000);
 			LCD_clear();
 			system_status(0);
@@ -187,8 +197,11 @@ void system_status(int status) {
 	
 	//system armed (polling sensors)
 	else if(status == 1) {
+		//clear LCD
+		LCD_clear();
+
 		//set status LEDs
-		PORTC &= ~(1<<YELLOW);
+		PORTC |= (1<<YELLOW);
 		PORTC &= ~(1<<GREEN | 1<<RED);
 		
 		//set LCD
@@ -209,13 +222,15 @@ void system_status(int status) {
 		
 		//set off alarm
 		siren_on();		
-
-		LCD_clear();
-		LCD_print("Enter Password:");
-		increment_cursor(25);
 		
+		_delay_ms(2000);	//delay to allow entry method message to display
+
 		//read for password
 		while(1) {
+			LCD_clear();
+			LCD_print("Enter Password:");
+			increment_cursor(25);
+
 			if(read_password()) {
 				LCD_clear();
 				siren_off();
@@ -223,7 +238,28 @@ void system_status(int status) {
 				_delay_ms(2000);
 				system_status(0);
 			}
+			else {
+				if(fails >= 5) system_status(4);
+				LCD_clear();
+				LCD_print("Wrong Password!");
+				increment_cursor(25);
+				LCD_print("Tries left: ");
+				LCD_Char((5-fails) + '0');
+				_delay_ms(2000);
+				LCD_clear();
+			}
 		}
+	}
+	else if(status == 4) {
+		PORTC &= ~(1<<GREEN | 1<<YELLOW);
+		PORTC |= (1<<RED);
+
+		siren_on();
+		LCD_clear();
+		LCD_print("System Lockout!");
+		increment_cursor(25);
+		LCD_print("Too many tries!");
+		while(1);
 	}
 }
 
@@ -385,14 +421,16 @@ void enable_cursor() {
 void poll_sensors(void)
 {
 	//hall effects
-	if(!((PIND & (1<<HE1)) == 0) || !((PIND & (1<<HE2)) == 0)) {
+	if(!((PIND & (1<<HE1)) == 0)) {
+		LCD_clear();
+		LCD_print("Window Entry!");
 		system_status(2);
 	}
-	
-	//PIR
-	//if((PINB & (1<<PIR)) == 0) {
-	//	system_status(2);
-	//}
+	if(!((PIND & (1<<HE2)) == 0)) {
+		LCD_clear();
+		LCD_print("Door Entry!");
+		system_status(2);
+	}
 }
 
 //Speaker Functions
@@ -571,9 +609,11 @@ int read_password(void) {
 		{
 			pin[4]='\0'; //Terminate the string with a null terminator...that makes it a string.
 			if (strcmp(pin,password)) {
+				fails++;
 				return 0;
 			}
 			else {
+				fails = 0;
 				return 1;
 			}
 		}
